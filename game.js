@@ -5,7 +5,7 @@ canvas.width = 640;
 canvas.height = 400;
 const ctx = canvas.getContext('2d');
 
-const bgMusic = new Audio('Rad-Roller/assets/bg-music.mp3');
+const bgMusic = new Audio('assets/bg-music.mp3');
 bgMusic.setAttribute('preload', 'auto');
 bgMusic.setAttribute('playsinline', '');
 bgMusic.loop = true;

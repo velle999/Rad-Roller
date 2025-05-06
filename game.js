@@ -1,9 +1,31 @@
-// ===== RAD PIXEL RACER - AI CARS WITH BOUNCE COLLISIONS =====
+// ===== RAD PIXEL RACER SETUP =====
 const canvas = document.createElement('canvas');
 document.body.appendChild(canvas);
 canvas.width = 640;
 canvas.height = 400;
 const ctx = canvas.getContext('2d');
+
+let speed = 0;
+const maxSpeed = 8;
+let curve = 0;
+let curveDelta = 0;
+let futureCurve = 0;
+let playerX = 0;
+let roadOffset = 0;
+
+const keyState = {};
+window.addEventListener('keydown', e => keyState[e.key] = true);
+window.addEventListener('keyup', e => keyState[e.key] = false);
+
+const aiCars = [];
+for (let i = 0; i < 5; i++) {
+  aiCars.push({
+    z: Math.random() * 800 + 200,
+    x: (Math.random() - 0.5) * 2,
+    speed: 2 + Math.random() * 3,
+    color: `hsl(${Math.random() * 360}, 80%, 60%)`
+  });
+}
 
 const bgMusic = new Audio('assets/bg-music.mp3');
 bgMusic.setAttribute('preload', 'auto');
@@ -13,47 +35,62 @@ bgMusic.volume = 0.5;
 
 window.addEventListener('click', () => {
   bgMusic.volume = 0;
-  bgMusic.play()
-    .then(() => {
-      console.log('🎵 Music is playing');
-      let fadeIn = setInterval(() => {
-        if (bgMusic.volume < 0.5) {
-          bgMusic.volume = Math.min(0.5, bgMusic.volume + 0.01);
-        } else {
-          clearInterval(fadeIn);
-        }
-      }, 100);
-    })
-    .catch(err => console.warn('🔇 Music play failed:', err));
+  bgMusic.play().then(() => {
+    let fadeIn = setInterval(() => {
+      if (bgMusic.volume < 0.5) {
+        bgMusic.volume = Math.min(0.5, bgMusic.volume + 0.01);
+      } else {
+        clearInterval(fadeIn);
+      }
+    }, 100);
+  }).catch(err => console.warn('🔇 Music play failed:', err));
 }, { once: true });
 
-let roadOffset = 0;
-let speed = 0;
-const maxSpeed = 8;
-let curve = 0;
-let curveDelta = 0;
-let futureCurve = 0;
-let playerX = 0;
+const cityLights = [];
+for (let i = 0; i < 50; i++) {
+  cityLights.push([8, 24, 40].map(offsetY => {
+    return {
+      offsetY,
+      color: Math.random() < 0.15 ? '#ffcc00' : '#333'
+    };
+  }));
+}
 
-const aiCars = [];
-for (let i = 0; i < 5; i++) {
-  aiCars.push({
-    z: Math.random() * 800 + 200,
-    x: (Math.random() - 0.5) * 2,
-    speed: 2 + Math.random() * 3
+const stars = [];
+for (let i = 0; i < 100; i++) {
+  stars.push({ x: Math.random() * canvas.width, y: Math.random() * (canvas.height / 2), size: Math.random() * 2 });
+}
+
+const billboardText = ['NEON', '8BIT', 'TOKYO', 'RUSH'];
+let cloudOffset = 0;
+
+function drawStars() {
+  ctx.fillStyle = '#fff';
+  stars.forEach(star => {
+    ctx.beginPath();
+    ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+    ctx.fill();
   });
 }
 
-const keyState = {};
-window.addEventListener('keydown', e => keyState[e.key] = true);
-window.addEventListener('keyup', e => keyState[e.key] = false);
-
 function drawCityscape() {
-  ctx.fillStyle = '#222';
   for (let i = 0; i < 50; i++) {
     const x = i * 13;
     const height = 20 + (i % 5) * 10;
-    ctx.fillRect(x, canvas.height / 2 - height, 10, height);
+    const y = canvas.height / 2 - height;
+    ctx.fillStyle = '#222';
+    ctx.fillRect(x, y, 10, height);
+
+    if (i % 10 === 0) {
+      ctx.fillStyle = '#ff00ff';
+      ctx.font = 'bold 8px monospace';
+      ctx.fillText(billboardText[(i / 10) % billboardText.length], x - 2, y - 5);
+    }
+
+    cityLights[i].forEach(win => {
+      ctx.fillStyle = win.color;
+      ctx.fillRect(x + 2, y + win.offsetY, 6, 4);
+    });
   }
 }
 
@@ -99,6 +136,7 @@ function drawAICars() {
       car.z = 1000 + Math.random() * 500;
       car.x = (Math.random() - 0.5) * 2;
       car.speed = 2 + Math.random() * 3;
+      car.color = `hsl(${Math.random() * 360}, 80%, 60%)`;
     }
 
     const scale = 300 / car.z;
@@ -110,11 +148,10 @@ function drawAICars() {
     const height = 15 * scale;
 
     if (y < canvas.height && y > horizon) {
-      ctx.fillStyle = '#0ff';
+      ctx.fillStyle = car.color;
       ctx.fillRect(centerX - width / 2, y - height, width, height);
     }
 
-    // Collision with bounce
     const playerZ = 100;
     const playerScale = 300 / playerZ;
     const playerWidth = 30 * playerScale;
@@ -147,7 +184,7 @@ function drawDashboard() {
   ctx.fillText(`Curve: ${Math.floor(curve)}`, 200, canvas.height - 15);
 }
 
-let curveTimer = Math.floor(60 * 20 + Math.random() * 60 * 25); // 20–45 seconds at 60fps
+let curveTimer = Math.floor(60 * 20 + Math.random() * 60 * 25);
 let curveTarget = 0;
 
 function update() {
@@ -157,20 +194,33 @@ function update() {
   if (keyState['ArrowRight']) playerX = Math.min(1, playerX + 0.05);
 
   curveTimer--;
-if (curveTimer <= 0) {
-  const bend = (Math.random() > 0.5 ? 1 : -1) * 1.5;
-  curveTarget = bend;
-  curveTimer = Math.floor(60 * 20 + Math.random() * 60 * 25); // next change in 20–45s
-} else {
-  // slowly return to straight over time
-  curveTarget *= 0.98;
-  if (Math.abs(curveTarget) < 0.1) curveTarget = 0;
-}
-curveDelta += (curveTarget - curveDelta) * 0.05;
-curve += curveDelta;
-futureCurve += (curve - futureCurve) * 0.1;
+  if (curveTimer <= 0) {
+    const bend = (Math.random() > 0.5 ? 1 : -1) * 1.5;
+    curveTarget = bend;
+    curveTimer = Math.floor(60 * 20 + Math.random() * 60 * 25);
+  } else {
+    curveTarget *= 0.98;
+    if (Math.abs(curveTarget) < 0.1) curveTarget = 0;
+  }
+  curveDelta += (curveTarget - curveDelta) * 0.05;
+  curve += curveDelta;
+  futureCurve += (curve - futureCurve) * 0.1;
 
   roadOffset += speed * 2;
+}
+
+function drawClouds() {
+  cloudOffset += 0.2;
+  ctx.fillStyle = '#444';
+  for (let i = 0; i < 3; i++) {
+    const x = (i * 250 - cloudOffset % 250);
+    const y = 30 + 10 * Math.sin((cloudOffset + i * 50) * 0.01);
+    ctx.beginPath();
+    ctx.arc(x, y, 20, 0, Math.PI * 2);
+    ctx.arc(x + 15, y + 5, 15, 0, Math.PI * 2);
+    ctx.arc(x + 30, y, 20, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function render() {
@@ -180,6 +230,8 @@ function render() {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height / 2);
 
+  drawStars();
+  drawClouds();
   drawCityscape();
   drawRoad();
   drawAICars();
@@ -194,5 +246,3 @@ function loop() {
 }
 
 loop();
-
-
